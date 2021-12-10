@@ -5,7 +5,8 @@ import argparse
 import torch, torchvision
 from torchvision import transforms
 import numpy as np
-from VAE import model
+# from VAE import model
+from VAE.VAE import Model
 
 def train(vae, trainloader, optimizer, epoch):
     vae.train()  # set to training mode
@@ -41,7 +42,7 @@ def main(args):
         trainset = torchvision.datasets.FashionMNIST(root='~/torch/data/FashionMNIST',
             train=True, download=True, transform=transform)
         trainloader = torch.utils.data.DataLoader(trainset,
-            batch_size=batch_size, shuffle=True, num_workers=2)
+            batch_size=args.batch_size, shuffle=True, num_workers=2)
         testset = torchvision.datasets.FashionMNIST(root='./data/FashionMNIST',
             train=False, download=True, transform=transform)
         testloader = torch.utils.data.DataLoader(testset,
