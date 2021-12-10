@@ -11,14 +11,41 @@ from VAE.VAE import Model
 def train(vae, trainloader, optimizer, epoch):
     vae.train()  # set to training mode
     #TODO
+    running_loss = 0
+    batch_num = 1
+    for inputs, _ in trainloader:
+        batch_num += 1
+        inputs = inputs.view(inputs.shape[0], inputs.shape[1] * inputs.shape[2] * inputs.shape[3])  # change  shape from BxCxHxW to Bx(C*H*W)
+        # inputs = inputs.to(device)
+    
+        optimizer.zero_grad()
+        loss = -vae(inputs).mean()
+        running_loss += float(loss)
+        loss.backward()
+        optimizer.step()
+    return running_loss / batch_num
 
 
 def test(vae, testloader, filename, epoch):
     vae.eval()  # set to inference mode
+    running_loss = 0
     with torch.no_grad():
-        pass
-        #TODO
+        #TODO    
+        num_samples = 100
+        samples = vae.sample(num_samples).gpu()
+        samples = samples.view(num_samples, samples.shape[0] , samples.shape[1] , samples.shape[2])
+        torchvision.utils.save_image(torchvision.utils.make_grid(samples),
+                                        './samples/' + filename + 'epoch%d.png' % epoch)
 
+        for n_batches, data in enumerate(testloader, 1):
+            inputs, _ = data
+            inputs = inputs.view(inputs.shape[0], inputs.shape[1] * inputs.shape[2] * inputs.shape[3])  # change  shape from BxCxHxW to Bx(C*H*W)
+            # inputs = inputs.to(device)
+            loss = -vae(inputs).mean()
+            running_loss += float(loss)
+    return running_loss / n_batches
+
+        
 
 def main(args):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

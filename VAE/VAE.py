@@ -1,7 +1,9 @@
 """NICE model
 """
 
+from numpy.lib.function_base import select
 import torch
+from torch._C import device
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -49,17 +51,28 @@ class Model(nn.Module):
             mu = torch.zeros((sample_size,self.latent_dim)).to(self.device)
         if logvar == None:
             logvar = torch.zeros((sample_size,self.latent_dim)).to(self.device)
-        #TODO
-
-
+        return torch.tensor([self.z_sample(mu, logvar) for _ in range(sample_size)], device=self.device)
+        
+    
     def z_sample(self, mu, logvar):
+        '''
+        :param mu: 
+        :param logvar: 
+        :return 
+        '''
         #TODO
-        pass
+        return torch.normal(mu,logvar,device=self.device)
 
     def loss(self,x,recon,mu,logvar):
         #TODO
-        pass
+        def f(z):
+            return 1/(2*torch.pi * logvar) * torch.exp(((z-mu)**2) / logvar**2)
+        density = f(recon)
+        return torch.dot(x, torch.log(density)) + torch.dot((1-x), torch.log(1-density))
 
     def forward(self, x):
         #TODO
-        pass
+        latent = self.encoder(x)
+        up_sampled = self.upsample(latent)
+        recon = self.decoder(up_sampled)
+        return recon
