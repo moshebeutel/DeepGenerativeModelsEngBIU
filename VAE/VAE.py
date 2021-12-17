@@ -1,6 +1,7 @@
 """NICE model
 """
 
+from math import log
 from numpy.lib.function_base import select
 import torch
 from torch._C import device
@@ -39,19 +40,20 @@ class Model(nn.Module):
             nn.Sigmoid()
         )
 
+        
 
-    def sample(self,sample_size,mu=None,logvar=None):
+
+    def sample(self,sample_size):
         '''
         :param sample_size: Number of samples
         :param mu: z mean, None for prior (init with zeros)
         :param logvar: z logstd, None for prior (init with zeros)
         :return:
         '''
-        if mu==None:
-            mu = torch.zeros((sample_size,self.latent_dim)).to(self.device)
-        if logvar == None:
-            logvar = torch.zeros((sample_size,self.latent_dim)).to(self.device)
-        return torch.tensor([self.z_sample(mu, logvar) for _ in range(sample_size)], device=self.device)
+        with torch.no_grad():
+            # z = self.z_sample(mu, logvar)
+            z = torch.rand((sample_size, self.latent_dim)).to(self.device)
+            return self.decoder(self.upsample(z).view(-1, 64, 7, 7))
         
     
     def z_sample(self, mu, logvar):
@@ -61,18 +63,28 @@ class Model(nn.Module):
         :return 
         '''
         #TODO
-        return torch.normal(mu,logvar,device=self.device)
+        std = torch.exp(0.5 * logvar)
+        eps = torch.rand_like(std).to(self.device)
+        return mu + eps * std
 
     def loss(self,x,recon,mu,logvar):
         #TODO
         def f(z):
             return 1/(2*torch.pi * logvar) * torch.exp(((z-mu)**2) / logvar**2)
-        density = f(recon)
-        return torch.dot(x, torch.log(density)) + torch.dot((1-x), torch.log(1-density))
+        def KL(mu, logvar):
+            return torch.mul(torch.sum(1+ logvar-torch.pow(mu,2.0)-torch.exp(logvar)),-0.5)
+        def binary_cross_entropy(x, recon):
+            # return torch.dot(x, torch.log(f_z)) + torch.dot(1-x,torch.log(1-f_z))
+            return F.binary_cross_entropy(recon, x, reduction='sum')
+        bce = binary_cross_entropy(x,recon)
+        return binary_cross_entropy(x,recon) + KL(mu,logvar)
 
     def forward(self, x):
         #TODO
-        latent = self.encoder(x)
-        up_sampled = self.upsample(latent)
-        recon = self.decoder(up_sampled)
-        return recon
+        latent = self.encoder(x).view(-1,64*7*7)
+        mu = self.mu(latent)
+        logvar = self.logvar(latent)
+        z = self.z_sample(mu, logvar)
+        up_sampled = self.upsample(z).view(-1,64,7,7)
+        reconstructed = self.decoder(up_sampled)
+        return reconstructed, mu, logvar
