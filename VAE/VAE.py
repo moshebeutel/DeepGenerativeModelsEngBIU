@@ -27,10 +27,13 @@ class Model(nn.Module):
             nn.Conv2d(32, 64, 4, 2, 1),  # B,  64,  7, 7
         )
 
-        self.mu = nn.Linear(64 * 7 * 7, latent_dim)
-        self.logvar = nn.Linear(64 * 7 * 7, latent_dim)
+        self.encoder_output_shape = (64,7,7)
+        self.encoder_output_size = 64*7*7
 
-        self.upsample = nn.Linear(latent_dim, 64 * 7 * 7)
+        self.mu = nn.Linear(self.encoder_output_size, latent_dim)
+        self.logvar = nn.Linear(self.encoder_output_size, latent_dim)
+
+        self.upsample = nn.Linear(latent_dim, self.encoder_output_size)
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(64, 32, 4, 2, 1),  # B,  64,  14,  14
             nn.ReLU(True),
@@ -40,9 +43,6 @@ class Model(nn.Module):
             nn.Sigmoid()
         )
 
-        
-
-
     def sample(self,sample_size):
         '''
         :param sample_size: Number of samples
@@ -51,40 +51,38 @@ class Model(nn.Module):
         :return:
         '''
         with torch.no_grad():
-            # z = self.z_sample(mu, logvar)
             z = torch.rand((sample_size, self.latent_dim)).to(self.device)
-            return self.decoder(self.upsample(z).view(-1, 64, 7, 7))
+            return self.decoder(self.upsample(z).view(-1, *self.encoder_output_shape))
         
     
     def z_sample(self, mu, logvar):
         '''
-        :param mu: 
-        :param logvar: 
-        :return 
+        :param mu: model mean
+        :param logvar: model log of variance - log(sigma^2)
+        :return float: sample from the latent space
         '''
-        #TODO
-        std = torch.exp(0.5 * logvar)
-        eps = torch.rand_like(std).to(self.device)
-        return mu + eps * std
+        # Use Reparametrization trick - 
+        #   epsilon ~ U(0,1)
+        #   g(epsilon) = mu + sigma * epsilon
+        #   z = g(epsilon, (mu, sigma))
+        sigma = torch.exp(0.5 * logvar)
+        epsilon = torch.rand_like(sigma).to(self.device)
+        return mu + sigma * epsilon
 
-    def loss(self,x,recon,mu,logvar):
-        #TODO
-        def f(z):
-            return 1/(2*torch.pi * logvar) * torch.exp(((z-mu)**2) / logvar**2)
+    def loss(self,x,x_reconstruction,mu,logvar):
         def KL(mu, logvar):
-            return torch.mul(torch.sum(1+ logvar-torch.pow(mu,2.0)-torch.exp(logvar)),-0.5)
-        def binary_cross_entropy(x, recon):
-            # return torch.dot(x, torch.log(f_z)) + torch.dot(1-x,torch.log(1-f_z))
-            return F.binary_cross_entropy(recon, x, reduction='sum')
-        bce = binary_cross_entropy(x,recon)
-        return binary_cross_entropy(x,recon) + KL(mu,logvar)
+            # Use KL of two gaussians KL(N(mu, exp(logvar)) || N(0,1))
+            return torch.mul(torch.sum(-1-logvar+torch.pow(mu,2.0)+torch.exp(logvar)),0.5)
+        def binary_cross_entropy(x, x_reconstruction):
+            return F.binary_cross_entropy(x_reconstruction, x, reduction='sum')
+        batch_size = x.shape[0]
+        return (binary_cross_entropy(x,x_reconstruction) + KL(mu,logvar)) / batch_size
 
     def forward(self, x):
-        #TODO
-        latent = self.encoder(x).view(-1,64*7*7)
+        latent = self.encoder(x).view(-1,self.encoder_output_size)
         mu = self.mu(latent)
         logvar = self.logvar(latent)
         z = self.z_sample(mu, logvar)
-        up_sampled = self.upsample(z).view(-1,64,7,7)
-        reconstructed = self.decoder(up_sampled)
-        return reconstructed, mu, logvar
+        up_sampled = self.upsample(z).view(-1,*self.encoder_output_shape)
+        x_reconstruction = self.decoder(up_sampled)
+        return x_reconstruction, mu, logvar
