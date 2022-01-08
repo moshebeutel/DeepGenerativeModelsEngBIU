@@ -19,6 +19,7 @@ def sample(G,save_file):
     G.eval()  # set to inference mode
     with torch.no_grad():
         #TODO
+        pass
 
 
 def main(args):
