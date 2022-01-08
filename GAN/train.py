@@ -104,7 +104,7 @@ def sample(G, sample_size, device, save_file, epoch, dataset, loss_type):
 
 
 def main(args):
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     transform  = transforms.Compose([
         transforms.ToTensor(),
         # transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),  # trainloader returns an error when this normalization is used
